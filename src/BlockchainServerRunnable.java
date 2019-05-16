@@ -53,6 +53,12 @@ public class BlockchainServerRunnable implements Runnable{
                         outWriter.print(blockchain.toString() + "\n");
                         outWriter.flush();
                         break;
+                    case "hb":
+                        handleHeartBeat(Integer.parseInt(tokens[1]), tokens[2]);
+                        break;
+                    case "si":
+                        handleServerInfo(Integer.parseInt(tokens[1]), new ServerInfo(tokens[2], Integer.parseInt(tokens[3])));
+                        break;
                     case "cc":
                         return;
                     default:
@@ -61,7 +67,76 @@ public class BlockchainServerRunnable implements Runnable{
                 }
             }
         } catch (IOException e) {
-        } catch (InterruptedException e) {
+        }
+    }
+
+    private void handleHeartBeat(int remotePort, String seqNum) {
+
+        String localIP = clientSocket.getLocalAddress().toString();
+        int localPort = clientSocket.getLocalPort();
+        String remoteIP = (((InetSocketAddress) clientSocket.getRemoteSocketAddress()).getAddress()).toString().replace("/", "");
+
+        ServerInfo localServerInfo = new ServerInfo(localIP, localPort);
+        ServerInfo remoteServerInfo = new ServerInfo(remoteIP, remotePort);
+
+        serverStatus.put(remoteServerInfo, new Date());
+
+        if (seqNum.equals("0")) {
+
+            ArrayList<Thread> threads = new ArrayList<>();
+
+            for (ServerInfo serverInfo : serverStatus.keySet()) {
+                if (serverInfo.equals(remoteServerInfo) || serverInfo.equals(localServerInfo)) {
+                    continue;
+                }
+                Thread thread = new Thread(new PeriodicClientRunnable(serverInfo, "si|" + localPort + "|" + remoteIP + "|" + remotePort));
+                threads.add(thread);
+                thread.start();
+            }
+
+            for (Thread thread : threads) {
+                try {
+                    thread.join();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+            }
+        }
+    }
+
+    private void handleServerInfo(int remotePort, ServerInfo newServerInfo) {
+        if (!serverStatus.keySet().contains(newServerInfo)) {
+            serverStatus.put(newServerInfo, new Date());
+
+            String localIP = clientSocket.getLocalAddress().toString();
+            int localPort = clientSocket.getLocalPort();
+            String remoteIP = (((InetSocketAddress) clientSocket.getRemoteSocketAddress()).getAddress()).toString().replace("/", "");
+
+            ServerInfo localServerInfo = new ServerInfo(localIP, localPort);
+            ServerInfo remoteServerInfo = new ServerInfo(remoteIP, remotePort);
+
+            ArrayList<Thread> threads = new ArrayList<>();
+
+            for (ServerInfo serverInfo : serverStatus.keySet()) {
+
+                if (serverInfo.equals(newServerInfo) || serverInfo.equals(remoteServerInfo) || serverInfo.equals(localServerInfo)) {
+                    continue;
+                }
+
+                Thread thread = new Thread(new PeriodicClientRunnable(serverInfo, "si|" + localPort + "|" + newServerInfo.getHost() + "|" + newServerInfo.getPort()));
+                threads.add(thread);
+                thread.start();
+            }
+
+            for (Thread thread : threads) {
+                try {
+                    thread.join();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+            }
         }
     }
 }

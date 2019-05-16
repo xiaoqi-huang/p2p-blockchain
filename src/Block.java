@@ -65,10 +65,8 @@ public class Block implements Serializable {
                 out.writeUTF("tx|" + tx.getSender() + "|" + tx.getContent());
             }
             byte[] bytes = baout.toByteArray();
-            return digest.digest(bytes);;
-        } catch (NoSuchAlgorithmException e) {
-            return null;
-        } catch (IOException e) {
+            return digest.digest(bytes);
+        } catch (NoSuchAlgorithmException | IOException e) {
             return null;
         }
     }

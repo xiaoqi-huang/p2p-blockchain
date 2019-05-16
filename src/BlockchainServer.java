@@ -29,28 +29,33 @@ public class BlockchainServer {
         HashMap<ServerInfo, Date> serverStatus = new HashMap<ServerInfo, Date>();
         serverStatus.put(new ServerInfo(remoteHost, remotePort), new Date());
 
+        // Start up PeriodicCommit
         PeriodicCommitRunnable pcr = new PeriodicCommitRunnable(blockchain);
         Thread pct = new Thread(pcr);
         pct.start();
 
+        // Start up PeriodicHServerStatusCheck
+        new Thread(new PeriodicServerStatusCheckRunnable(serverStatus)).start();
+
+        // Start up PeriodicHeartBear
+        new Thread(new PeriodicHeartBeatRunnable(localPort, serverStatus)).start();
+
         ServerSocket serverSocket = null;
         try {
-            serverSocket = new ServerSocket(localPortNumber);
+            serverSocket = new ServerSocket(localPort);
 
             while (true) {
                 Socket clientSocket = serverSocket.accept();
                 new Thread(new BlockchainServerRunnable(clientSocket, blockchain, serverStatus)).start();
             }
-        } catch (IllegalArgumentException e) {
-        } catch (IOException e) {
+        } catch (IllegalArgumentException | IOException e) {
         } finally {
             try {
                 pcr.setRunning(false);
                 pct.join();
                 if (serverSocket != null)
                     serverSocket.close();
-            } catch (IOException e) {
-            } catch (InterruptedException e) {
+            } catch (IOException | InterruptedException e) {
             }
         }
     }
