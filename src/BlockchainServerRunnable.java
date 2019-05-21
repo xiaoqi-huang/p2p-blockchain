@@ -1,8 +1,9 @@
+import com.sun.xml.internal.rngom.parse.host.Base;
+
 import java.io.*;
-import java.net.Socket;
 import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
@@ -42,6 +43,7 @@ public class BlockchainServerRunnable implements Runnable{
 
                 String[] tokens = inputLine.split("\\|");
                 switch (tokens[0]) {
+                    // Blockchain
                     case "tx":
                         if (blockchain.addTransaction(inputLine))
                             outWriter.print("Accepted\n\n");
@@ -53,14 +55,27 @@ public class BlockchainServerRunnable implements Runnable{
                         outWriter.print(blockchain.toString() + "\n");
                         outWriter.flush();
                         break;
+
+                    // Heart beat
                     case "hb":
                         handleHeartBeat(Integer.parseInt(tokens[1]), tokens[2]);
                         break;
                     case "si":
                         handleServerInfo(Integer.parseInt(tokens[1]), new ServerInfo(tokens[2], Integer.parseInt(tokens[3])));
                         break;
+
+                    // Catch up
+                    case "lb":
+                        handleLatestBlock(Integer.parseInt(tokens[1]), Integer.parseInt(tokens[2]), tokens[3]);
+                        break;
+                    case "cu":
+                        System.out.println(inputLine);
+                        handleCatchUp(tokens.length == 1 ? null : tokens[1]);
+                        break;
+
                     case "cc":
                         return;
+
                     default:
                         outWriter.print("Error\n\n");
                         outWriter.flush();
@@ -138,5 +153,138 @@ public class BlockchainServerRunnable implements Runnable{
 
             }
         }
+    }
+
+    private void handleLatestBlock(int remotePort, int length, String encodedHash) {
+
+        if (encodedHash == null) return;
+
+        byte[] localHash = blockchain.getHead() == null ? null : blockchain.getHead().calculateHash();
+        byte[] remoteHash = Base64.getDecoder().decode(encodedHash);
+
+        if (localHash != null && (blockchain.getLength() > length || (blockchain.getLength() == length && compareHash(localHash, remoteHash) <= 0))) {
+            return;
+        }
+
+        try {
+            // Connect to the peer server
+            String remoteIP = (((InetSocketAddress) clientSocket.getRemoteSocketAddress()).getAddress()).toString().replace("/", "");
+            Socket toPeer = new Socket(remoteIP, remotePort);
+
+            ArrayList<Block> blocks = new ArrayList<>();
+
+            PrintWriter writer = new PrintWriter(toPeer.getOutputStream(), true);
+            writer.println("cu");
+            writer.flush();
+
+            ObjectInputStream reader = new ObjectInputStream(toPeer.getInputStream());
+            blocks.add((Block) reader.readObject());
+
+            reader.close();
+            writer.close();
+            toPeer.close();
+
+            // Read the rest blocks
+            String prev = Base64.getEncoder().encodeToString(blocks.get(0).getPreviousHash());
+
+            while (!prev.equals("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")) {
+                toPeer = new Socket(remoteIP, remotePort);
+
+                writer = new PrintWriter(toPeer.getOutputStream(), true);
+                writer.println("cu|" + prev);
+                writer.flush();
+
+                reader = new ObjectInputStream(toPeer.getInputStream());
+                blocks.add((Block) reader.readObject());
+
+                reader.close();
+                writer.close();
+                toPeer.close();
+
+                prev = Base64.getEncoder().encodeToString(blocks.get(blocks.size() - 1).getPreviousHash());
+            }
+
+            blockchain.setHead(blocks.get(0));
+            blockchain.setLength(blocks.size());
+
+            Block curr = blockchain.getHead();
+
+            for (int i = 0; i < blocks.size(); i++) {
+                if (i == blocks.size() - 1) {
+                    curr.setPreviousBlock(null);
+                } else {
+                    curr.setPreviousBlock(blocks.get(i + 1));
+                }
+                curr = curr.getPreviousBlock();
+            }
+        } catch (ClassNotFoundException | IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void handleCatchUp(String hash) {
+
+        ObjectOutputStream oos;
+
+        try {
+            oos = new ObjectOutputStream(clientSocket.getOutputStream());
+        } catch (IOException e) {
+            return;
+        }
+
+        if (hash == null) {
+            try {
+                oos.writeObject(blockchain.getHead());
+                oos.flush();
+                oos.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } else {
+
+            Block curr = blockchain.getHead();
+
+            while (curr != null) {
+
+                if (Base64.getEncoder().encodeToString(curr.calculateHash()).equals(hash)) {
+
+                    try {
+                        oos.writeObject(curr);
+                        oos.flush();
+                        oos.close();
+                    } catch (IOException e) {
+                    }
+
+                    break;
+
+                } else {
+                    curr = curr.getPreviousBlock();
+                }
+            }
+        }
+    }
+
+    private int compareHash(byte[] arrayA, byte[] arrayB) {
+
+        if (arrayA.length < arrayB.length) {
+            return -1;
+        }
+
+        if (arrayA.length > arrayB.length) {
+            return 1;
+        }
+
+        for (int i = 0; i < arrayA.length; i++) {
+
+            if (arrayA[i] < arrayB[i]) {
+                return -1;
+            }
+
+            if (arrayA[i] > arrayB[i]) {
+                return 1;
+            }
+        }
+
+        return 0;
     }
 }

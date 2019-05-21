@@ -20,6 +20,7 @@ public class PeriodicClientRunnable implements Runnable {
             toServer.connect(new InetSocketAddress(serverInfo.getHost(), serverInfo.getPort()), 2000);
             PrintWriter writer = new PrintWriter(toServer.getOutputStream(), true);
 
+            System.out.println("sent: " + message);
             writer.println(message);
             writer.flush();
 

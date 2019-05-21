@@ -69,7 +69,7 @@ public class Blockchain {
         newBlock.setTransactions(pool);
         byte[] hash = newBlock.calculateHashWithNonce(nonce);
         String hashString = Base64.getEncoder().encodeToString(hash);
-        if(hashString.startsWith("A")) {
+        if (hashString.startsWith("A")) {
             newBlock.setPreviousBlock(head);
             head = newBlock;
             pool = new ArrayList<>();

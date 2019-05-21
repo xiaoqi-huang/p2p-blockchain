@@ -40,6 +40,9 @@ public class BlockchainServer {
         // Start up PeriodicHeartBear
         new Thread(new PeriodicHeartBeatRunnable(localPort, serverStatus)).start();
 
+        // Set up PeriodicCatchUpRunnable
+        new Thread(new PeriodicCatchUpRunnable(localPort, serverStatus, blockchain)).start();
+
         ServerSocket serverSocket = null;
         try {
             serverSocket = new ServerSocket(localPort);
