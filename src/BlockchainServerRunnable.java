@@ -69,7 +69,6 @@ public class BlockchainServerRunnable implements Runnable{
                         handleLatestBlock(Integer.parseInt(tokens[1]), Integer.parseInt(tokens[2]), tokens[3]);
                         break;
                     case "cu":
-                        System.out.println(inputLine);
                         handleCatchUp(tokens.length == 1 ? null : tokens[1]);
                         break;
 
@@ -171,6 +170,7 @@ public class BlockchainServerRunnable implements Runnable{
             String remoteIP = (((InetSocketAddress) clientSocket.getRemoteSocketAddress()).getAddress()).toString().replace("/", "");
             Socket toPeer = new Socket(remoteIP, remotePort);
 
+            Block tmp = blockchain.getHead();
             ArrayList<Block> blocks = new ArrayList<>();
 
             PrintWriter writer = new PrintWriter(toPeer.getOutputStream(), true);
@@ -187,7 +187,8 @@ public class BlockchainServerRunnable implements Runnable{
             // Read the rest blocks
             String prev = Base64.getEncoder().encodeToString(blocks.get(0).getPreviousHash());
 
-            while (!prev.equals("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")) {
+            while (blockchain.getLength() + blocks.size() < length) {
+
                 toPeer = new Socket(remoteIP, remotePort);
 
                 writer = new PrintWriter(toPeer.getOutputStream(), true);
@@ -205,13 +206,13 @@ public class BlockchainServerRunnable implements Runnable{
             }
 
             blockchain.setHead(blocks.get(0));
-            blockchain.setLength(blocks.size());
+            blockchain.setLength(length);
 
             Block curr = blockchain.getHead();
 
             for (int i = 0; i < blocks.size(); i++) {
                 if (i == blocks.size() - 1) {
-                    curr.setPreviousBlock(null);
+                    curr.setPreviousBlock(tmp);
                 } else {
                     curr.setPreviousBlock(blocks.get(i + 1));
                 }

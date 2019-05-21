@@ -47,6 +47,9 @@ public class BlockchainServer {
         try {
             serverSocket = new ServerSocket(localPort);
 
+            Thread initCatchUp = new Thread(new PeriodicClientRunnable(new ServerInfo(remoteHost, remotePort), "cu"));
+            initCatchUp.start();
+
             while (true) {
                 Socket clientSocket = serverSocket.accept();
                 new Thread(new BlockchainServerRunnable(clientSocket, blockchain, serverStatus)).start();
